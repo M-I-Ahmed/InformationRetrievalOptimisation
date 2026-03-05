@@ -19,13 +19,24 @@
 #  - llama-3-8b
 #  - Gemma-2B
 
+#Complete list so far:
+#  - ManuBERT
+#  - BAAI BGE-M3
+#  - ColBERT v2
+#  - E5-LARGE
+#  - nvidia-llama-embed-nemotron-8b
+#  - OpenAI embedding model (text-embedding-3-large)
+#  - OpenAI embedding model (text-embedding-3-small)
+#  - Qwen3-embedding-8B
+
+
 # code structure:
 # 1. Load the data from neo4j - Retrieve all the app IDs and their metadescriptions and store them in a dataframe.
 # 2. Run the model and create the embeddings for the descriptions of the nodes retrieved from neo4j. 
 # 3. Store the embeddings back on the node with the id - the naming convention should be "embedding_model_name_embedding" (e.g. "text-embedding-3-small_embedding") to avoid confusion and to be able to easily retrieve the embeddings later on for the retrieval process.
 
 """
-Embedding Generator Script (EGS)
+Embedding Generator Script (EGS)yes
 
 Goal:
 1) Load node descriptions from Neo4j.
@@ -58,6 +69,25 @@ try:
 except Exception:  # pragma: no cover - optional dependency
 	SentenceTransformer = None  # type: ignore[assignment]
 
+try:
+	from transformers import AutoTokenizer, AutoModel
+	import torch
+	import torch.nn.functional as torch_f
+except Exception:  # pragma: no cover - optional dependency
+	AutoTokenizer = None  # type: ignore[assignment]
+	AutoModel = None  # type: ignore[assignment]
+	torch = None  # type: ignore[assignment]
+	torch_f = None  # type: ignore[assignment]
+
+_HF_ENCODER = None
+_HF_MODEL_NAME = None
+_HF_TRUST_REMOTE_CODE = None
+
+_COLBERT_TOKENIZER = None
+_COLBERT_MODEL = None
+_COLBERT_MODEL_NAME = None
+_COLBERT_DEVICE = None
+
 
 @dataclass
 class Neo4jConfig:
@@ -76,6 +106,8 @@ class EmbeddingJobConfig:
 	embedding_property: Optional[str]
 	batch_size: int
 	limit: Optional[int]
+	trust_remote_code: bool
+	colbert_pool: str
 
 
 def load_config_from_env() -> Neo4jConfig:
@@ -108,7 +140,7 @@ def build_read_query(description_property: str, node_label: Optional[str]) -> st
 	return (
 		f"MATCH (n{label_clause}) "
 		f"WHERE n[$desc_prop] IS NOT NULL "
-		f"RETURN id(n) AS node_id, n[$desc_prop] AS text"
+		f"RETURN elementId(n) AS node_id, n[$desc_prop] AS text"
 	)
 
 
@@ -121,7 +153,7 @@ def build_write_query(embedding_property: str) -> str:
 		)
 	return (
 		"UNWIND $rows AS row "
-		"MATCH (n) WHERE id(n) = row.node_id "
+		"MATCH (n) WHERE elementId(n) = row.node_id "
 		f"SET n.{embedding_property} = row.embedding"
 	)
 
@@ -158,25 +190,97 @@ def embed_texts_openai(model: str, texts: List[str]) -> List[List[float]]:
 	return [item.embedding for item in response.data]
 
 
-def embed_texts_sentence_transformers(model: str, texts: List[str], batch_size: int) -> List[List[float]]:
+def embed_texts_sentence_transformers(
+	model: str,
+	texts: List[str],
+	batch_size: int,
+	trust_remote_code: bool,
+) -> List[List[float]]:
 	"""Embed text using Hugging Face sentence-transformers models."""
 	if SentenceTransformer is None:
 		raise ImportError(
 			"sentence-transformers package is not installed. Install it to use Hugging Face models."
 		)
 
-	encoder = SentenceTransformer(model)
+	global _HF_ENCODER, _HF_MODEL_NAME, _HF_TRUST_REMOTE_CODE
+	if _HF_ENCODER is None or _HF_MODEL_NAME != model or _HF_TRUST_REMOTE_CODE != trust_remote_code:
+		_HF_ENCODER = SentenceTransformer(model, trust_remote_code=trust_remote_code)
+		_HF_MODEL_NAME = model
+		_HF_TRUST_REMOTE_CODE = trust_remote_code
+
+	encoder = _HF_ENCODER
 	embeddings = encoder.encode(texts, batch_size=batch_size, convert_to_numpy=True, normalize_embeddings=True)
 	return [embedding.tolist() for embedding in embeddings]
 
 
-def embed_texts(provider: str, model: str, texts: List[str], batch_size: int) -> List[List[float]]:
+def embed_texts_colbert(model: str, texts: List[str], pool: str) -> List[List[float]]:
+	"""Embed text using ColBERT-style token embeddings via transformers."""
+	if AutoTokenizer is None or AutoModel is None or torch is None or torch_f is None:
+		raise ImportError("transformers/torch are not installed. Install them to use ColBERT models.")
+
+	global _COLBERT_TOKENIZER, _COLBERT_MODEL, _COLBERT_MODEL_NAME, _COLBERT_DEVICE
+	if _COLBERT_MODEL is None or _COLBERT_MODEL_NAME != model:
+		_COLBERT_TOKENIZER = AutoTokenizer.from_pretrained(model)
+		_COLBERT_MODEL = AutoModel.from_pretrained(model)
+		_COLBERT_DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+		_COLBERT_MODEL.to(_COLBERT_DEVICE)
+		_COLBERT_MODEL.eval()
+		_COLBERT_MODEL_NAME = model
+
+	inputs = _COLBERT_TOKENIZER(
+		texts,
+		padding=True,
+		truncation=True,
+		max_length=512,
+		return_tensors="pt",
+	)
+	inputs = {key: value.to(_COLBERT_DEVICE) for key, value in inputs.items()}
+
+	with torch.no_grad():
+		outputs = _COLBERT_MODEL(**inputs, return_dict=True)
+		last_hidden = outputs.last_hidden_state
+
+	mask = inputs.get("attention_mask")
+	if mask is None:
+		raise ValueError("ColBERT model inputs missing attention_mask.")
+
+	pool = pool.lower()
+	if pool not in {"mean", "cls", "max"}:
+		raise ValueError("ColBERT pooling must be one of: mean, cls, max.")
+
+	all_embeddings: List[List[float]] = []
+	for idx in range(last_hidden.size(0)):
+		valid = mask[idx].bool()
+		tokens = last_hidden[idx][valid]
+		tokens = torch_f.normalize(tokens, p=2, dim=1)
+
+		if pool == "cls":
+			pooled = tokens[0]
+		elif pool == "max":
+			pooled = tokens.max(dim=0).values
+		else:
+			pooled = tokens.mean(dim=0)
+
+		all_embeddings.append(pooled.cpu().tolist())
+
+	return all_embeddings
+
+
+def embed_texts(
+	provider: str,
+	model: str,
+	texts: List[str],
+	batch_size: int,
+	trust_remote_code: bool,
+) -> List[List[float]]:
 	"""Route embedding requests to the chosen provider."""
 	if provider == "openai":
 		return embed_texts_openai(model, texts)
 	if provider == "hf":
-		return embed_texts_sentence_transformers(model, texts, batch_size)
-	raise ValueError("Unsupported provider. Use 'openai' or 'hf'.")
+		return embed_texts_sentence_transformers(model, texts, batch_size, trust_remote_code)
+	if provider == "colbert":
+		raise ValueError("ColBERT requires a pooling choice; use embed_texts_colbert in main().")
+	raise ValueError("Unsupported provider. Use 'openai', 'hf', or 'colbert'.")
 
 
 def write_embeddings(driver, database: Optional[str], write_query: str, rows: List[dict]) -> None:
@@ -188,7 +292,12 @@ def write_embeddings(driver, database: Optional[str], write_query: str, rows: Li
 def parse_args() -> EmbeddingJobConfig:
 	"""Parse CLI arguments to configure the embedding job."""
 	parser = argparse.ArgumentParser(description="Generate and store embeddings for Neo4j nodes.")
-	parser.add_argument("--provider", choices=["openai", "hf"], required=True, help="Embedding provider.")
+	parser.add_argument(
+		"--provider",
+		choices=["openai", "hf", "colbert"],
+		required=True,
+		help="Embedding provider.",
+	)
 	parser.add_argument("--model", required=True, help="Model name (e.g., text-embedding-3-small or BAAI/bge-m3).")
 	parser.add_argument(
 		"--description-property",
@@ -203,6 +312,17 @@ def parse_args() -> EmbeddingJobConfig:
 	)
 	parser.add_argument("--batch-size", type=int, default=64, help="Batch size for embedding and writing.")
 	parser.add_argument("--limit", type=int, default=None, help="Limit number of nodes for testing.")
+	parser.add_argument(
+		"--trust-remote-code",
+		action="store_true",
+		help="Allow Hugging Face models that require custom code.",
+	)
+	parser.add_argument(
+		"--colbert-pool",
+		choices=["mean", "cls", "max"],
+		default="mean",
+		help="Pooling strategy for ColBERT token embeddings (stored as a single vector).",
+	)
 
 	args = parser.parse_args()
 	return EmbeddingJobConfig(
@@ -213,6 +333,8 @@ def parse_args() -> EmbeddingJobConfig:
 		embedding_property=args.embedding_property,
 		batch_size=args.batch_size,
 		limit=args.limit,
+		trust_remote_code=args.trust_remote_code,
+		colbert_pool=args.colbert_pool,
 	)
 
 
@@ -222,7 +344,12 @@ def main() -> None:
 	job = parse_args()
 
 	# Determine which node property will store the embeddings.
-	embedding_property = job.embedding_property or sanitize_property_name(job.model)
+	if job.embedding_property:
+		embedding_property = job.embedding_property
+	elif job.provider == "openai":
+		embedding_property = f"openai_{sanitize_property_name(job.model)}"
+	else:
+		embedding_property = sanitize_property_name(job.model)
 
 	# Build Cypher queries for reading and writing.
 	read_query = build_read_query(job.description_property, job.node_label)
@@ -237,9 +364,21 @@ def main() -> None:
 			return
 
 		# Step 2: Embed in batches to avoid excessive memory usage.
-		for batch in chunked(nodes, job.batch_size):
+		total = len(nodes)
+		batch_count = (total + job.batch_size - 1) // job.batch_size
+		for index, batch in enumerate(chunked(nodes, job.batch_size), start=1):
+			print(f"Processing batch {index}/{batch_count} ({len(batch)} items)...")
 			texts = [item["text"] for item in batch]
-			embeddings = embed_texts(job.provider, job.model, texts, job.batch_size)
+			if job.provider == "colbert":
+				embeddings = embed_texts_colbert(job.model, texts, job.colbert_pool)
+			else:
+				embeddings = embed_texts(
+					job.provider,
+					job.model,
+					texts,
+					job.batch_size,
+					job.trust_remote_code,
+				)
 
 			# Step 3: Write embeddings back to the corresponding nodes.
 			rows = [
@@ -247,6 +386,7 @@ def main() -> None:
 				for item, embedding in zip(batch, embeddings)
 			]
 			write_embeddings(driver, config.database, write_query, rows)
+			print(f"Finished batch {index}/{batch_count}.")
 
 		print(f"Stored embeddings in property '{embedding_property}' for {len(nodes)} nodes.")
 	finally:

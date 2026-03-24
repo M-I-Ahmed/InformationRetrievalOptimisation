@@ -35,6 +35,11 @@
 #  - Qodo-Embed-1-7B ( high on ranking tasks)
 #  - Qodo-Embed-1-1.5B ( high on ranking tasks, but smaller)
 #  - lightonai/LateOn-Code ( high on ranking tasks)
+#  - Voyage-4 - The models by voyage specialise in retrieval
+#  - Voyage-code-3
+#  - voyageai/voyage-4-nano
+
+
 
 
 
@@ -65,6 +70,7 @@ from __future__ import annotations
 import argparse
 import os
 import re
+import time
 from dataclasses import dataclass
 from typing import Iterable, List, Optional
 
@@ -75,6 +81,11 @@ try:
 	from openai import OpenAI
 except Exception:  # pragma: no cover - optional dependency
 	OpenAI = None  # type: ignore[assignment]
+
+try:
+	import voyageai
+except Exception:  # pragma: no cover - optional dependency
+	voyageai = None  # type: ignore[assignment]
 
 try:
 	from sentence_transformers import SentenceTransformer
@@ -120,6 +131,7 @@ class EmbeddingJobConfig:
 	limit: Optional[int]
 	trust_remote_code: bool
 	colbert_pool: str
+	sleep_seconds: float
 
 
 def load_config_from_env() -> Neo4jConfig:
@@ -225,6 +237,20 @@ def embed_texts_sentence_transformers(
 	return [embedding.tolist() for embedding in embeddings]
 
 
+def embed_texts_voyage(model: str, texts: List[str]) -> List[List[float]]:
+	"""Embed text using Voyage AI's embedding API."""
+	if voyageai is None:
+		raise ImportError("voyageai package is not installed. Install it to use Voyage AI embeddings.")
+
+	api_key = os.getenv("VOYAGE_API_KEY")
+	if not api_key:
+		raise ValueError("VOYAGE_API_KEY is missing in your .env file.")
+
+	client = voyageai.Client(api_key=api_key)
+	response = client.embed(texts, model=model)
+	return response.embeddings
+
+
 def embed_texts_colbert(model: str, texts: List[str], pool: str) -> List[List[float]]:
 	"""Embed text using ColBERT-style token embeddings via transformers."""
 	if AutoTokenizer is None or AutoModel is None or torch is None or torch_f is None:
@@ -288,11 +314,13 @@ def embed_texts(
 	"""Route embedding requests to the chosen provider."""
 	if provider == "openai":
 		return embed_texts_openai(model, texts)
+	if provider == "voyage":
+		return embed_texts_voyage(model, texts)
 	if provider == "hf":
 		return embed_texts_sentence_transformers(model, texts, batch_size, trust_remote_code)
 	if provider == "colbert":
 		raise ValueError("ColBERT requires a pooling choice; use embed_texts_colbert in main().")
-	raise ValueError("Unsupported provider. Use 'openai', 'hf', or 'colbert'.")
+	raise ValueError("Unsupported provider. Use 'openai', 'voyage', 'hf', or 'colbert'.")
 
 
 def write_embeddings(driver, database: Optional[str], write_query: str, rows: List[dict]) -> None:
@@ -306,7 +334,7 @@ def parse_args() -> EmbeddingJobConfig:
 	parser = argparse.ArgumentParser(description="Generate and store embeddings for Neo4j nodes.")
 	parser.add_argument(
 		"--provider",
-		choices=["openai", "hf", "colbert"],
+		choices=["openai", "voyage", "hf", "colbert"],
 		required=True,
 		help="Embedding provider.",
 	)
@@ -335,6 +363,12 @@ def parse_args() -> EmbeddingJobConfig:
 		default="mean",
 		help="Pooling strategy for ColBERT token embeddings (stored as a single vector).",
 	)
+	parser.add_argument(
+		"--sleep-seconds",
+		type=float,
+		default=0.0,
+		help="Optional delay between batches (seconds) to respect rate limits.",
+	)
 
 	args = parser.parse_args()
 	return EmbeddingJobConfig(
@@ -347,6 +381,7 @@ def parse_args() -> EmbeddingJobConfig:
 		limit=args.limit,
 		trust_remote_code=args.trust_remote_code,
 		colbert_pool=args.colbert_pool,
+		sleep_seconds=args.sleep_seconds,
 	)
 
 
@@ -399,6 +434,9 @@ def main() -> None:
 			]
 			write_embeddings(driver, config.database, write_query, rows)
 			print(f"Finished batch {index}/{batch_count}.")
+			if job.sleep_seconds > 0 and index < batch_count:
+				print(f"Sleeping for {job.sleep_seconds} seconds to respect rate limits...")
+				time.sleep(job.sleep_seconds)
 
 		print(f"Stored embeddings in property '{embedding_property}' for {len(nodes)} nodes.")
 	finally:

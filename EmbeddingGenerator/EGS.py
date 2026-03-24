@@ -37,7 +37,7 @@
 #  - lightonai/LateOn-Code ( high on ranking tasks)
 #  - Voyage-4 - The models by voyage specialise in retrieval
 #  - Voyage-code-3
-#  - voyageai/voyage-4-nano
+#  - voyageai/voyage-4-nano - test the open version from hugging face. 
 
 
 

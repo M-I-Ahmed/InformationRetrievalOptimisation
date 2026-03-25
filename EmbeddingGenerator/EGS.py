@@ -39,7 +39,7 @@
 #  - Voyage-code-3
 #  - voyageai/voyage-4-nano - test the open version from hugging face. 
 
-
+#  - Need to add BM25 as the baseline for the retrieval process, but it does not require embedding generation, so it will be implemented directly in the retrieval script.
 
 
 

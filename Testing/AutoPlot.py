@@ -15,7 +15,7 @@ def load_results(file_path):
             results[model_name] = model_results
     return results
 
-def plot_results(results, ks):
+def plot_results(results, ks, title, ylabel):
     plt.figure(figsize=(10, 6))
     markers = ["o", "s", "D", "^", "v", "<", ">", "P", "X", "*", "h", "H", "d", "p", "8"]
     colors = plt.cm.tab20.colors
@@ -25,8 +25,8 @@ def plot_results(results, ks):
         color = colors[idx % len(colors)]
         plt.plot(ks, recalls, marker=marker, color=color, label=model_name)
     plt.xlabel("k")
-    plt.ylabel("Recall@k")
-    plt.title("Recall@k for Different Models")
+    plt.ylabel(ylabel)
+    plt.title(title)
     plt.xticks(ks)
     plt.legend()
     plt.grid()
@@ -37,12 +37,22 @@ def plot_results(results, ks):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Plot recall results from CSV file")
     parser.add_argument("--input", type=str, required=True, help="Path to the input CSV file with recall results")
+    parser.add_argument(
+        "--precision-input",
+        type=str,
+        default=None,
+        help="Optional CSV file with precision@k results.",
+    )
     args = parser.parse_args()
 
-    results = load_results(args.input)
-    ks = sorted({k for model_results in results.values() for k in model_results.keys()})
-    
-    plot_results(results, ks)
+    recall_results = load_results(args.input)
+    recall_ks = sorted({k for model_results in recall_results.values() for k in model_results.keys()})
+    plot_results(recall_results, recall_ks, "Recall@k for Different Models", "Recall@k")
+
+    if args.precision_input:
+        precision_results = load_results(args.precision_input)
+        precision_ks = sorted({k for model_results in precision_results.values() for k in model_results.keys()})
+        plot_results(precision_results, precision_ks, "Precision@k for Different Models", "Precision@k")
 
 
     

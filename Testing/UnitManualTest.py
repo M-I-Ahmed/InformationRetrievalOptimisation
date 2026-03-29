@@ -20,7 +20,6 @@ import json
 import os
 from dataclasses import dataclass
 from typing import Dict, List, Optional
-from xml.parsers.expat import model
 
 import numpy as np
 from neo4j import GraphDatabase
@@ -276,6 +275,13 @@ def recall_at_k(retrieved: List[str], relevant: List[str], k: int) -> float:
 	return hits / max(len(relevant), 1)
 
 
+def precision_at_k(retrieved: List[str], relevant: List[str], k: int) -> float:
+	"""Compute precision@k for a single query."""
+	retrieved_k = retrieved[:k]
+	hits = sum(1 for item in retrieved_k if item in relevant)
+	return hits / max(k, 1)
+
+
 def parse_args() -> argparse.Namespace:
 	"""Parse CLI arguments for manual recall testing."""
 	default_query_path = os.path.join(
@@ -304,6 +310,11 @@ def parse_args() -> argparse.Namespace:
 		help="Path to CSV output file.",
 	)
 	parser.add_argument(
+		"--output-suffix",
+		default=None,
+		help="Optional suffix to append to the output filename (before .csv).",
+	)
+	parser.add_argument(
 		"--verbose",
 		action="store_true",
 		help="Print per-query recall details.",
@@ -312,6 +323,17 @@ def parse_args() -> argparse.Namespace:
 		"--bm25-only",
 		action="store_true",
 		help="Run only the BM25 baseline (skip embedding models).",
+	)
+	parser.add_argument(
+		"--models",
+		default=None,
+		help="Comma-separated list of model names to run (exact names from the model list).",
+	)
+	parser.add_argument(
+		"--model-set",
+		choices=["base", "qodo"],
+		default=None,
+		help="Select a predefined model set (base or qodo).",
 	)
 	return parser.parse_args()
 
@@ -324,7 +346,7 @@ def main() -> None:
 	ks = [1, 3, 5, 10, 15, 20, 25, 30, 35, 40, 45, 50]
 	text_property = "App_Metadescription"
 
-	models = [
+	base_models = [
 		ModelSpec("akumar33/ManuBERT", "hf"),
 		ModelSpec("BAAI/bge-m3", "hf"),
 		ModelSpec("colbert-ir/colbertv2.0", "colbert"),
@@ -337,12 +359,39 @@ def main() -> None:
 		ModelSpec("voyageai/voyage-4-nano", "hf"),
 		ModelSpec("voyage-code-3", "voyage"),
 		ModelSpec("voyage-4", "voyage"),
-		#ModelSpec("Qodo/Qodo-Embed-1-1.5B", "hf"),
-        #ModelSpec("Qodo/Qodo-Embed-1-7B", "hf"),    
 		ModelSpec("Qwen/Qwen3-embedding-0.6B", "hf"),
 	]
+	qodo_models = [
+		ModelSpec("Qodo/Qodo-Embed-1-1.5B", "hf"),
+		ModelSpec("Qodo/Qodo-Embed-1-7B", "hf"),
+	]
+	models = base_models + qodo_models
 
-	results: Dict[str, Dict[int, float]] = {}
+	recall_results: Dict[str, Dict[int, float]] = {}
+	precision_results: Dict[str, Dict[int, float]] = {}
+	selected_models = None
+	if args.model_set == "base":
+		models = base_models
+	elif args.model_set == "qodo":
+		models = qodo_models
+
+	if args.models:
+		selected_models = {name.strip() for name in args.models.split(",") if name.strip()}
+		models = [model for model in models if model.name in selected_models]
+
+	output_path = args.output
+	if args.output_suffix is None and args.model_set:
+		args.output_suffix = args.model_set
+	if args.output_suffix:
+		root, ext = os.path.splitext(output_path)
+		if not ext:
+			ext = ".csv"
+		output_path = f"{root}_{args.output_suffix}{ext}"
+
+	precision_output_path = os.path.join(
+		os.path.dirname(output_path),
+		"precision_at_k_results.csv",
+	)
 
 	with GraphDatabase.driver(config.uri, auth=(config.username, config.password)) as driver:
 		text_by_id = fetch_text_BM25(driver, config.database, args.node_label, text_property)
@@ -359,6 +408,7 @@ def main() -> None:
 					continue
 
 				per_k_scores: Dict[int, List[float]] = {k: [] for k in ks}
+				per_k_precision: Dict[int, List[float]] = {k: [] for k in ks}
 				for query in queries:
 					query_text = query.get("query_text", "")
 					expected = query.get("expected_app_ids", [])
@@ -385,13 +435,21 @@ def main() -> None:
 
 					for k in ks:
 						recall = recall_at_k(ranked, expected, k)
+						precision = precision_at_k(ranked, expected, k)
 						per_k_scores[k].append(recall)
+						per_k_precision[k].append(precision)
 						if args.verbose:
-							print(f"  recall@{k}: {recall:.3f}")
+							print(f"  recall@{k}: {recall:.3f} | precision@{k}: {precision:.3f}")
 
-				results[model.name] = {k: float(np.mean(per_k_scores[k]) if per_k_scores[k] else 0.0) for k in ks}
+				recall_results[model.name] = {
+					k: float(np.mean(per_k_scores[k]) if per_k_scores[k] else 0.0) for k in ks
+				}
+				precision_results[model.name] = {
+					k: float(np.mean(per_k_precision[k]) if per_k_precision[k] else 0.0) for k in ks
+				}
 
 		bm25_per_k: Dict[int, List[float]] = {k: [] for k in ks}
+		bm25_precision: Dict[int, List[float]] = {k: [] for k in ks}
 		for query in queries:
 			query_text = query.get("query_text", "")
 			expected = query.get("expected_app_ids", [])
@@ -405,22 +463,37 @@ def main() -> None:
 
 			for k in ks:
 				recall = recall_at_k(ranked_app_ids, expected, k)
+				precision = precision_at_k(ranked_app_ids, expected, k)
 				bm25_per_k[k].append(recall)
+				bm25_precision[k].append(precision)
 
-		results["BM25"] = {k: float(np.mean(bm25_per_k[k]) if bm25_per_k[k] else 0.0) for k in ks}
+		recall_results["BM25"] = {
+			k: float(np.mean(bm25_per_k[k]) if bm25_per_k[k] else 0.0) for k in ks
+		}
+		precision_results["BM25"] = {
+			k: float(np.mean(bm25_precision[k]) if bm25_precision[k] else 0.0) for k in ks
+		}
 
-	if not results:
+	if not recall_results:
 		print("No results to write.")
 		return
 	
-	with open(args.output, "w", newline="", encoding="utf-8") as handle:
+	with open(output_path, "w", newline="", encoding="utf-8") as handle:
 		writer = csv.writer(handle)
 		writer.writerow(["Model"] + [str(k) for k in ks])
-		for model_name, model_results in results.items():
+		for model_name, model_results in recall_results.items():
 			row = [model_name] + [f"{model_results.get(k, 0.0):.6f}" for k in ks]
 			writer.writerow(row)
 
-	print(f"Recall results saved to {args.output}")
+	with open(precision_output_path, "w", newline="", encoding="utf-8") as handle:
+		writer = csv.writer(handle)
+		writer.writerow(["Model"] + [str(k) for k in ks])
+		for model_name, model_results in precision_results.items():
+			row = [model_name] + [f"{model_results.get(k, 0.0):.6f}" for k in ks]
+			writer.writerow(row)
+
+	print(f"Recall results saved to {output_path}")
+	print(f"Precision results saved to {precision_output_path}")
 
 
 if __name__ == "__main__":

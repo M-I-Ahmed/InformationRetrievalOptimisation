@@ -282,6 +282,34 @@ def precision_at_k(retrieved: List[str], relevant: List[str], k: int) -> float:
 	return hits / max(k, 1)
 
 
+def f2_score(precision: float, recall: float, beta: float = 2.0) -> float:
+	"""Compute F2 score from precision and recall."""
+	denom = (beta ** 2) * precision + recall
+	if denom == 0.0:
+		return 0.0
+	return (1 + beta ** 2) * (precision * recall) / denom
+
+
+def ndcg_at_k(retrieved: List[str], relevant: List[str], k: int) -> float:
+	"""Compute nDCG@k for a single query using binary relevance."""
+	retrieved_k = retrieved[:k]
+
+	def dcg(items: List[str]) -> float:
+		score = 0.0
+		for idx, item in enumerate(items):
+			rel = 1.0 if item in relevant else 0.0
+			score += rel / np.log2(idx + 2)
+		return score
+
+	dcg_value = dcg(retrieved_k)
+	ideal_k = min(k, len(relevant))
+	ideal_list = list(relevant)[:ideal_k]
+	idcg_value = dcg(ideal_list)
+	if idcg_value == 0.0:
+		return 0.0
+	return dcg_value / idcg_value
+
+
 def parse_args() -> argparse.Namespace:
 	"""Parse CLI arguments for manual recall testing."""
 	default_query_path = os.path.join(
@@ -369,6 +397,8 @@ def main() -> None:
 
 	recall_results: Dict[str, Dict[int, float]] = {}
 	precision_results: Dict[str, Dict[int, float]] = {}
+	f2_results: Dict[str, Dict[int, float]] = {}
+	ndcg_results: Dict[str, Dict[int, float]] = {}
 	selected_models = None
 	if args.model_set == "base":
 		models = base_models
@@ -392,6 +422,14 @@ def main() -> None:
 		os.path.dirname(output_path),
 		"precision_at_k_results.csv",
 	)
+	f2_output_path = os.path.join(
+		os.path.dirname(output_path),
+		"f2_score_results.csv",
+	)
+	ndcg_output_path = os.path.join(
+		os.path.dirname(output_path),
+		"ndcg_at_k_results.csv",
+	)
 
 	with GraphDatabase.driver(config.uri, auth=(config.username, config.password)) as driver:
 		text_by_id = fetch_text_BM25(driver, config.database, args.node_label, text_property)
@@ -409,6 +447,8 @@ def main() -> None:
 
 				per_k_scores: Dict[int, List[float]] = {k: [] for k in ks}
 				per_k_precision: Dict[int, List[float]] = {k: [] for k in ks}
+				per_k_f2: Dict[int, List[float]] = {k: [] for k in ks}
+				per_k_ndcg: Dict[int, List[float]] = {k: [] for k in ks}
 				for query in queries:
 					query_text = query.get("query_text", "")
 					expected = query.get("expected_app_ids", [])
@@ -436,10 +476,14 @@ def main() -> None:
 					for k in ks:
 						recall = recall_at_k(ranked, expected, k)
 						precision = precision_at_k(ranked, expected, k)
+						f2 = f2_score(precision, recall)
+						ndcg = ndcg_at_k(ranked, expected, k)
 						per_k_scores[k].append(recall)
 						per_k_precision[k].append(precision)
+						per_k_f2[k].append(f2)
+						per_k_ndcg[k].append(ndcg)
 						if args.verbose:
-							print(f"  recall@{k}: {recall:.3f} | precision@{k}: {precision:.3f}")
+							print(f"  recall@{k}: {recall:.3f} | precision@{k}: {precision:.3f} | f2@{k}: {f2:.3f} | ndcg@{k}: {ndcg:.3f}")
 
 				recall_results[model.name] = {
 					k: float(np.mean(per_k_scores[k]) if per_k_scores[k] else 0.0) for k in ks
@@ -447,9 +491,17 @@ def main() -> None:
 				precision_results[model.name] = {
 					k: float(np.mean(per_k_precision[k]) if per_k_precision[k] else 0.0) for k in ks
 				}
+				f2_results[model.name] = {
+					k: float(np.mean(per_k_f2[k]) if per_k_f2[k] else 0.0) for k in ks
+				}
+				ndcg_results[model.name] = {
+					k: float(np.mean(per_k_ndcg[k]) if per_k_ndcg[k] else 0.0) for k in ks
+				}
 
 		bm25_per_k: Dict[int, List[float]] = {k: [] for k in ks}
 		bm25_precision: Dict[int, List[float]] = {k: [] for k in ks}
+		bm25_f2: Dict[int, List[float]] = {k: [] for k in ks}
+		bm25_ndcg: Dict[int, List[float]] = {k: [] for k in ks}
 		for query in queries:
 			query_text = query.get("query_text", "")
 			expected = query.get("expected_app_ids", [])
@@ -464,14 +516,24 @@ def main() -> None:
 			for k in ks:
 				recall = recall_at_k(ranked_app_ids, expected, k)
 				precision = precision_at_k(ranked_app_ids, expected, k)
+				f2 = f2_score(precision, recall)
+				ndcg = ndcg_at_k(ranked_app_ids, expected, k)
 				bm25_per_k[k].append(recall)
 				bm25_precision[k].append(precision)
+				bm25_f2[k].append(f2)
+				bm25_ndcg[k].append(ndcg)
 
 		recall_results["BM25"] = {
 			k: float(np.mean(bm25_per_k[k]) if bm25_per_k[k] else 0.0) for k in ks
 		}
 		precision_results["BM25"] = {
 			k: float(np.mean(bm25_precision[k]) if bm25_precision[k] else 0.0) for k in ks
+		}
+		f2_results["BM25"] = {
+			k: float(np.mean(bm25_f2[k]) if bm25_f2[k] else 0.0) for k in ks
+		}
+		ndcg_results["BM25"] = {
+			k: float(np.mean(bm25_ndcg[k]) if bm25_ndcg[k] else 0.0) for k in ks
 		}
 
 	if not recall_results:
@@ -492,8 +554,25 @@ def main() -> None:
 			row = [model_name] + [f"{model_results.get(k, 0.0):.6f}" for k in ks]
 			writer.writerow(row)
 
+	with open(f2_output_path, "w", newline="", encoding="utf-8") as handle:
+		writer = csv.writer(handle)
+		writer.writerow(["Model"] + [str(k) for k in ks])
+		for model_name, model_results in f2_results.items():
+			row = [model_name] + [f"{model_results.get(k, 0.0):.6f}" for k in ks]
+			writer.writerow(row)
+
+	with open(ndcg_output_path, "w", newline="", encoding="utf-8") as handle:
+		writer = csv.writer(handle)
+		writer.writerow(["Model"] + [str(k) for k in ks])
+		for model_name, model_results in ndcg_results.items():
+			row = [model_name] + [f"{model_results.get(k, 0.0):.6f}" for k in ks]
+			writer.writerow(row)
+
 	print(f"Recall results saved to {output_path}")
 	print(f"Precision results saved to {precision_output_path}")
+	print(f"F2 results saved to {f2_output_path}")
+
+	print(f"nDCG results saved to {ndcg_output_path}")
 
 
 if __name__ == "__main__":

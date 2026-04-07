@@ -1,0 +1,338 @@
+{
+  "golden_set": [
+    {
+      "query_id": "GQ_01",
+      "query_text": "I want an app to drill a hole in an A380 wing for a manhole cover",
+      "expected_app_ids": [
+        "Drill_001",
+        "app_aerodrill_pro",
+        "app_skydrill_basic",
+        "app_omni_drill_pro",
+        "Drill_004",
+        "Drill_005",
+        "Drill_008",
+        "app_comp_master"
+      ],
+      "difficulty": "contextual",
+      "intent": "Aerospace structural assembly involving aluminium and composite stack wing drilling with certification requirements"
+    },
+    {
+      "query_id": "GQ_02",
+      "query_text": "Software for automated quality assurance and defect detection of industrial parts",
+      "expected_app_ids": [
+        "app_visionguard_ai",
+        "Drill_006",
+        "Drill_007",
+        "Drill_009",
+        "W_006",
+        "Drill_004",
+        "W_005",
+        "app_pathwizard_ai"
+      ],
+      "difficulty": "semantic",
+      "intent": "General inspection and quality monitoring using vision systems, NDT, and anomaly detection"
+    },
+    {
+      "query_id": "GQ_03",
+      "query_text": "Robotic software for drilling complex stacks of composite and metallic materials",
+      "expected_app_ids": [
+        "Drill_005",
+        "Drill_001",
+        "app_comp_master",
+        "Drill_004",
+        "app_precision_stack_5000",
+        "app_roughcut_stacker",
+        "app_aerodrill_pro",
+        "app_skydrill_basic",
+        "app_titanium_fake",
+        "app_omni_drill_pro",
+        "Drill_008"
+      ],
+      "difficulty": "contextual",
+      "intent": "Multi-material stack drilling (CFRP/aluminium/titanium) common in aerospace and advanced manufacturing"
+    },
+    {
+      "query_id": "GQ_04",
+      "query_text": "Trajectory optimization and path planning for robotic arms in a factory",
+      "expected_app_ids": [
+        "app_pathwizard_ai",
+        "app_ecotune_green",
+        "app_quantum_adapter",
+        "Drill_004",
+        "ST_001",
+        "ST_002",
+        "ST_003",
+        "ST_005",
+        "ST_007",
+        "ST_008",
+        "W_001",
+        "W_002",
+        "W_003",
+        "app_aerodrill_pro"
+      ],
+      "difficulty": "semantic",
+      "intent": "Motion control, efficiency optimization, toolpath generation, and kinematic solving for robotics"
+    },
+    {
+      "query_id": "GQ_05",
+      "query_text": "Heavy duty drilling software for thick steel plates and cast iron components",
+      "expected_app_ids": [
+        "app_heavymetal_driller",
+        "Drill_002",
+        "app_omni_drill_pro",
+        "app_titanium_fake",
+        "Drill_008"
+      ],
+      "difficulty": "lexical",
+      "intent": "Subtractive machining for high-density structural ferrous materials in heavy machinery and construction"
+    },
+    {
+      "query_id": "GQ_06",
+      "query_text": "Aerospace certified software for precision finishing of carbon fibre components",
+      "expected_app_ids": [
+        "app_comp_master",
+        "Drill_001",
+        "Drill_005",
+        "app_skydrill_basic",
+        "app_omni_drill_pro",
+        "app_precision_stack_5000",
+        "Drill_008",
+        "ST_001",
+        "ST_002",
+        "ST_003",
+        "ST_007",
+        "ST_008"
+      ],
+      "difficulty": "contextual",
+      "intent": "High-precision CFRP processing with regulatory compliance (AS9100) for aerospace applications"
+    },
+    {
+      "query_id": "GQ_07",
+      "query_text": "Real-time monitoring and defect detection for robotic welding operations",
+      "expected_app_ids": [
+        "app_visionguard_ai",
+        "W_006",
+        "W_005",
+        "app_roboweld",
+        "W_001",
+        "W_002",
+        "W_003"
+
+      ],
+      "difficulty": "semantic",
+      "intent": "Welding process monitoring with focus on visual inspection and quality validation during operations"
+    },
+    {
+      "query_id": "GQ_08",
+      "query_text": "General purpose software for drilling hole patterns in aluminium and structural steel",
+      "expected_app_ids": [
+        "app_omni_drill_pro",
+        "Drill_001",
+        "app_aerodrill_pro",
+        "app_heavymetal_driller",
+        "app_titanium_fake",
+        "Drill_008",
+        "app_atomic_bore",
+        "app_skydrill_basic",
+        "app_legacy_bore",
+        "app_precision_stack_5000",
+        "app_roughcut_stacker",
+        "Drill_002",
+        "Drill_003",
+        "Drill_004",
+        "Drill_005",
+        "Drill_006",
+        "Drill_007",
+        "Drill_009"
+      ],
+      "difficulty": "lexical",
+      "intent": "Standard hole-making across common industrial metals with pattern capability for general manufacturing"
+    },
+    {
+      "query_id": "GQ_09",
+      "query_text": "Energy efficient motion planning for articulated robots in assembly lines",
+      "expected_app_ids": [
+        "app_ecotune_green",
+        "app_pathwizard_ai"
+      ],
+      "difficulty": "contextual",
+      "intent": "Green manufacturing and trajectory optimization for high-cycle assembly operations to reduce energy consumption"
+    },
+    {
+      "query_id": "GQ_10",
+      "query_text": "AS9100 compliant software for processing aerospace structural assemblies",
+      "expected_app_ids": [
+        "app_aerodrill_pro",
+        "Drill_001",
+        "ST_001",
+        "ST_002",
+        "ST_003",
+        "W_001",
+        "W_003",
+        "app_comp_master",
+        "app_skydrill_basic",
+        "Drill_005",
+        "Drill_006",
+        "Drill_007",
+        "Drill_008",
+        "app_precision_stack_5000",
+        "app_omni_drill_pro",
+        "ST_007",
+        "ST_008",
+        "ST_010",
+        "W_005",
+        "W_006"
+      ],
+      "difficulty": "contextual",
+      "intent": "Strict adherence to aviation quality standards across drilling, welding, and surface treatment processes"
+    },
+    {
+      "query_id": "GQ_11",
+      "query_text": "Need to weld titanium satellite components without warping or heat distortion",
+      "expected_app_ids": [
+        "W_005",
+        "W_001",
+        "W_003"
+      ],
+      "difficulty": "contextual",
+      "intent": "Exotic metal welding with heat management for aerospace/satellite applications requiring distortion control"
+    },
+    {
+      "query_id": "GQ_12",
+      "query_text": "Software to drill holes in nuclear reactor components with full compliance logging",
+      "expected_app_ids": [
+        "app_atomic_bore",
+        "app_omni_drill_pro",
+        "Drill_001",
+        "Drill_002",
+        "Drill_003",
+        "Drill_006",
+        "Drill_007",
+        "Drill_008"
+      ],
+      "difficulty": "contextual",
+      "intent": "Critical infrastructure drilling with ISO 19443 nuclear supply chain compliance and audit requirements"
+    },
+    {
+      "query_id": "GQ_13",
+      "query_text": "Automated sanding and surface preparation in high-volume manufacturing cells",
+      "expected_app_ids": [
+        "ST_007",
+        "ST_008"
+    ],
+      "difficulty": "lexical",
+      "intent": "Robotic abrasive processing to eliminate manual labour, improve safety, and enable automation"
+    },
+    {
+      "query_id": "GQ_14",
+      "query_text": "Need predictive maintenance for drilling operations to prevent tool breakage and defects",
+      "expected_app_ids": [
+        "Drill_009",
+        "app_visionguard_ai",
+        "Drill_004",
+        "Drill_006",
+        "Drill_008"
+    ],
+      "difficulty": "semantic",
+      "intent": "Anomaly detection, process monitoring, and predictive quality control in drilling operations"
+    },
+    {
+      "query_id": "GQ_15",
+      "query_text": "Orbital welding system for stainless steel hydraulic lines in spacecraft",
+      "expected_app_ids": [
+        "W_003",
+        "W_001",
+        "W_005"
+      ],
+      "difficulty": "contextual",
+      "intent": "Specialized GTAW orbital welding for aerospace tubing and pipe systems in satellite applications"
+    },
+    {
+      "query_id": "GQ_16",
+      "query_text": "Looking for apps to help drill Inconel and other difficult aerospace alloys",
+      "expected_app_ids": [
+        "app_aerodrill_pro",
+        "Drill_001",
+        "Drill_008",
+        "app_titanium_fake",
+        "app_omni_drill_pro",
+        "app_precision_stack_5000",
+        "app_roughcut_stacker",
+        "Drill_003",
+        "Drill_005",
+        "Drill_006",
+        "Drill_007",
+        "Drill_008",
+        "Drill_009"
+      ],
+      "difficulty": "semantic",
+      "intent": "Hard material machining requiring specialized feeds, speeds, adaptive control, and process parameters"
+    },
+    {
+      "query_id": "GQ_17",
+      "query_text": "Welding for ship construction and thick plate assembly",
+      "expected_app_ids": [
+        "W_002",
+        "app_roboweld"
+      ],
+      "difficulty": "lexical",
+      "intent": "Marine structural welding for shipyard applications and heavy plate work"
+    },
+
+    {
+      "query_id": "GQ_18",
+      "query_text": "Robotic painting system for complex aerospace parts requiring multi-layer certified coatings",
+      "expected_app_ids": [
+        "ST_001",
+        "ST_002",
+        "ST_003"
+      ],
+      "difficulty": "contextual",
+      "intent": "Advanced paint application with path planning for difficult geometries, aerospace certification, and specialty coatings"
+    },
+    {
+      "query_id": "GQ_19",
+      "query_text": "Anodization process control for aluminium aerospace components with colour consistency",
+      "expected_app_ids": [
+        "ST_010"
+      ],
+      "difficulty": "lexical",
+      "intent": "Electrochemical surface treatment for aluminium with precise finish control and consistent results"
+    },
+    {
+      "query_id": "GQ_20",
+      "query_text": "Job shop drilling applications for occasional precision holes with reaming capability",
+      "expected_app_ids": [
+        "Drill_003",
+        "Drill_001",
+        "app_aerodrill_pro",
+        "app_skydrill_basic",
+        "app_legacy_bore",
+        "app_titanium_fake",
+        "app_heavymetal_driller",
+        "app_omni_drill_pro",
+        "app_precision_stack_5000",
+        "app_roughcut_stacker",
+        "Drill_002",
+        "Drill_004",
+        "Drill_005",
+        "Drill_006",
+        "Drill_007",
+        "Drill_008",
+        "Drill_009"
+      ],
+      "difficulty": "contextual",
+      "intent": "Low-volume high-precision hole making for custom manufacturing environments with multi-process sequences"
+    },
+    {
+      "query_id": "GQ_21",
+      "query_text": "Anti-radar stealth coatings for military aircraft engine intake surfaces",
+      "expected_app_ids": [
+        "ST_002",
+        "ST_003"
+      ],
+      "difficulty": "contextual",
+      "intent": "Specialized defence coatings with tracking-reduction properties for aerospace military applications"
+    }
+  ]
+}

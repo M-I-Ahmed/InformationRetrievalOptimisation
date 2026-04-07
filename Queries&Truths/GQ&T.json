@@ -76,17 +76,21 @@
 
 
 
-    
+
     {
       "query_id": "GQ_01",
       "query_text": "I want an app to drill a hole in an A380 wing for a manhole cover",
       "expected_app_ids": [
         "Drill_001",
         "app_aerodrill_pro",
-        "app_skydrill_basic"
+        "app_skydrill_basic",
+        "app_omni_drill_pro",
+        "Drill_004",
+        "Drill_005",
+        "Drill_008"
       ],
       "difficulty": "contextual",
-      "intent": "Aerospace structural assembly involving aluminium wing drilling with certification requirements"
+      "intent": "Aerospace structural assembly involving aluminium and composite stack wing drilling with certification requirements"
     },
     {
       "query_id": "GQ_02",
